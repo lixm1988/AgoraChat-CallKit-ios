@@ -192,11 +192,12 @@ static AgoraChatCallManager *agoraChatCallManager = nil;
             [AgoraChatClient.sharedClient log:@"inviteUsers in group"];
             NSArray<NSString *> *joinedUsernameList = [self getJoinedUsernameList];
             
+            NSMutableArray<NSString*>* users = [NSMutableArray array];
             for (NSString *uId in aUsers) {
                 if ([joinedUsernameList containsObject:uId]) {
                     continue;
                 }
-                [weakself sendInviteMsgToCallee:uId isGroup:NO type:weakself.modal.currentCall.callType callId:weakself.modal.currentCall.callId channelName:weakself.modal.currentCall.channelName ext:aExt completion:nil];
+                [users addObject:uId];
                 [weakself _startCallTimer:uId];
                 dispatch_async(dispatch_get_main_queue(), ^{
                     [[weakself getMultiVC] setPlaceHolderUrl:[weakself getHeadImageByUserName:uId] member:uId];
@@ -205,6 +206,7 @@ static AgoraChatCallManager *agoraChatCallManager = nil;
                     aCompletionBlock(weakself.modal.currentCall.callId,nil);
                 }
             }
+            [weakself sendInviteMsgToCallee:groupId isGroup:YES type:weakself.modal.currentCall.callType callId:weakself.modal.currentCall.callId channelName:weakself.modal.currentCall.channelName ext:aExt receiverList:users completion:nil];
         } else {
             NSUUID *uuid = [NSUUID UUID];
             weakself.modal.currentCall = [[AgoraChatCall alloc] init];
@@ -216,7 +218,7 @@ static AgoraChatCallManager *agoraChatCallManager = nil;
             weakself.modal.currentCall.ext = aExt;
             dispatch_async(dispatch_get_main_queue(), ^{
                 for (NSString *uId in aUsers) {
-                    [weakself sendInviteMsgToCallee:uId isGroup:NO type:weakself.modal.currentCall.callType callId:weakself.modal.currentCall.callId channelName:weakself.modal.currentCall.channelName ext:aExt completion:nil];
+//                    [weakself sendInviteMsgToCallee:uId isGroup:NO type:weakself.modal.currentCall.callType callId:weakself.modal.currentCall.callId channelName:weakself.modal.currentCall.channelName ext:aExt completion:nil];
                     [weakself _startCallTimer:uId];
                     [[weakself getMultiVC] setPlaceHolderUrl:[weakself getHeadImageByUserName:uId] member:uId];
                 }
@@ -224,8 +226,8 @@ static AgoraChatCallManager *agoraChatCallManager = nil;
                     aCompletionBlock(weakself.modal.currentCall.callId, nil);
                 }
                 
-                [weakself sendInviteMsgToCallee:groupId isGroup:YES type:weakself.modal.currentCall.callType callId:weakself.modal.currentCall.callId channelName:weakself.modal.currentCall.channelName ext:aExt completion:^(NSString *callId, AgoraChatCallError *error) {
-                    
+                [weakself sendInviteMsgToCallee:groupId isGroup:YES type:weakself.modal.currentCall.callType callId:weakself.modal.currentCall.callId channelName:weakself.modal.currentCall.channelName ext:aExt receiverList:aUsers completion:^(NSString *callId, AgoraChatCallError *error) {
+
                 }];
             });
         }
@@ -265,7 +267,7 @@ static AgoraChatCallManager *agoraChatCallManager = nil;
             weakself.modal.state = AgoraChatCallState_Outgoing;
             weakself.modal.currentCall.ext = aExt;
             dispatch_async(dispatch_get_main_queue(), ^{
-                [weakself sendInviteMsgToCallee:uId isGroup:NO type:weakself.modal.currentCall.callType callId:weakself.modal.currentCall.callId channelName:weakself.modal.currentCall.channelName ext:aExt completion:aCompletionBlock];
+                [weakself sendInviteMsgToCallee:uId isGroup:NO type:weakself.modal.currentCall.callType callId:weakself.modal.currentCall.callId channelName:weakself.modal.currentCall.channelName ext:aExt receiverList:nil completion:aCompletionBlock];
                 [weakself _startCallTimer:uId];
                 //                if(aCompletionBlock)
                 //                    aCompletionBlock(weakself.modal.currentCall.callId,error);
@@ -512,7 +514,7 @@ static AgoraChatCallManager *agoraChatCallManager = nil;
     __weak typeof(self) weakself = self;
     dispatch_async(weakself.workQueue, ^{
         for (AgoraChatMessage *msg in aMessages) {
-            if (msg.chatType == AgoraChatTypeChat) {
+            {
                 [weakself _parseMsg:msg];
             }
         }
@@ -524,7 +526,7 @@ static AgoraChatCallManager *agoraChatCallManager = nil;
     __weak typeof(self) weakself = self;
     dispatch_async(weakself.workQueue, ^{
         for (AgoraChatMessage *msg in aCmdMessages) {
-            if (msg.chatType == AgoraChatTypeChat) {
+            {
                 [weakself _parseMsg:msg];
             }
         }
@@ -534,7 +536,7 @@ static AgoraChatCallManager *agoraChatCallManager = nil;
 #pragma mark - sendMessage
 
 //发送呼叫邀请消息
-- (void)sendInviteMsgToCallee:(NSString*)aUid isGroup:(BOOL)isGroup type:(AgoraChatCallType)aType callId:(NSString*)aCallId channelName:(NSString*)aChannelName ext:(NSDictionary*)aExt completion:(void (^)(NSString* callId,AgoraChatCallError*))aCompletionBlock
+- (void)sendInviteMsgToCallee:(NSString*)aUid isGroup:(BOOL)isGroup type:(AgoraChatCallType)aType callId:(NSString*)aCallId channelName:(NSString*)aChannelName ext:(NSDictionary*)aExt receiverList:(NSArray<NSString*>*)users completion:(void (^)(NSString* callId,AgoraChatCallError*))aCompletionBlock
 {
     if (aUid.length == 0 || aCallId.length == 0 || aChannelName.length == 0) {
         return;
@@ -581,6 +583,9 @@ static AgoraChatCallManager *agoraChatCallManager = nil;
 //    }
     AgoraChatMessage *msg = [[AgoraChatMessage alloc] initWithConversationID:aUid from:AgoraChatClient.sharedClient.currentUsername to:aUid body:msgBody ext:ext];
     msg.chatType = chatType;
+    if (users.count > 0) {
+        msg.receiverList = users;
+    }
     __weak typeof(self) weakself = self;
     [AgoraChatClient.sharedClient.chatManager sendMessage:msg progress:nil completion:^(AgoraChatMessage *message, AgoraChatError *error) {
         if (aCompletionBlock) {
@@ -608,7 +613,15 @@ static AgoraChatCallManager *agoraChatCallManager = nil;
         kCallerDevId:aDevId,
         kTs:[self getTs]
     };
-    AgoraChatMessage *msg = [[AgoraChatMessage alloc] initWithConversationID:aCallerUid from:AgoraChatClient.sharedClient.currentUsername to:aCallerUid body:msgBody ext:ext];
+    AgoraChatMessage *msg = nil;
+    if (self.modal.groupId.length > 0) {
+        msg = [[AgoraChatMessage alloc] initWithConversationID:self.modal.groupId body:msgBody ext:ext];
+        msg.chatType = AgoraChatTypeGroupChat;
+        msg.receiverList = @[aCallerUid];
+    } else {
+        msg = [[AgoraChatMessage alloc] initWithConversationID:aCallerUid from:AgoraChatClient.sharedClient.currentUsername to:aCallerUid body:msgBody ext:ext];
+    }
+    
     __weak typeof(self) weakself = self;
     [AgoraChatClient.sharedClient.chatManager sendMessage:msg progress:nil completion:^(AgoraChatMessage *message, AgoraChatError *error) {
         if (error) {
@@ -634,7 +647,14 @@ static AgoraChatCallManager *agoraChatCallManager = nil;
         kTs:[self getTs],
         kCalleeDevId:aCalleeDevId
     };
-    AgoraChatMessage *msg = [[AgoraChatMessage alloc] initWithConversationID:aUid from:AgoraChatClient.sharedClient.currentUsername to:aUid body:msgBody ext:ext];
+    AgoraChatMessage *msg = nil;
+    if (self.modal.groupId.length > 0) {
+        msg = [[AgoraChatMessage alloc] initWithConversationID:self.modal.groupId body:msgBody ext:ext];
+        msg.chatType = AgoraChatTypeGroupChat;
+        msg.receiverList = @[aUid];
+    } else {
+        msg = [[AgoraChatMessage alloc] initWithConversationID:aUid from:AgoraChatClient.sharedClient.currentUsername to:aUid body:msgBody ext:ext];
+    }
     __weak typeof(self) weakself = self;
     [AgoraChatClient.sharedClient.chatManager sendMessage:msg progress:nil completion:^(AgoraChatMessage *message, AgoraChatError *error) {
         if (error) {
@@ -657,7 +677,14 @@ static AgoraChatCallManager *agoraChatCallManager = nil;
         kCallerDevId:self.modal.curDevId,
         kTs:[self getTs]
     };
-    AgoraChatMessage *msg = [[AgoraChatMessage alloc] initWithConversationID:aUid from:AgoraChatClient.sharedClient.currentUsername to:aUid body:msgBody ext:ext];
+    AgoraChatMessage *msg = nil;
+    if (self.modal.groupId.length > 0) {
+        msg = [[AgoraChatMessage alloc] initWithConversationID:self.modal.groupId body:msgBody ext:ext];
+        msg.chatType = AgoraChatTypeGroupChat;
+        msg.receiverList = @[aUid];
+    } else {
+        msg = [[AgoraChatMessage alloc] initWithConversationID:aUid from:AgoraChatClient.sharedClient.currentUsername to:aUid body:msgBody ext:ext];
+    }
     __weak typeof(self) weakself = self;
     [AgoraChatClient.sharedClient.chatManager sendMessage:msg progress:nil completion:^(AgoraChatMessage *message, AgoraChatError *error) {
         if (error) {
@@ -686,7 +713,14 @@ static AgoraChatCallManager *agoraChatCallManager = nil;
     if (self.modal.currentCall.callType == AgoraChatCallType1v1Audio && self.bNeedSwitchToVoice) {
         [ext setObject:@YES forKey:kVideoToVoice];
     }
-    AgoraChatMessage *msg = [[AgoraChatMessage alloc] initWithConversationID:aCallerUid from:AgoraChatClient.sharedClient.currentUsername to:aCallerUid body:msgBody ext:ext];
+    AgoraChatMessage *msg = nil;
+    if (self.modal.groupId.length > 0) {
+        msg = [[AgoraChatMessage alloc] initWithConversationID:self.modal.groupId body:msgBody ext:ext];
+        msg.chatType = AgoraChatTypeGroupChat;
+        msg.receiverList = @[aCallerUid];
+    } else {
+        msg = [[AgoraChatMessage alloc] initWithConversationID:aCallerUid from:AgoraChatClient.sharedClient.currentUsername to:aCallerUid body:msgBody ext:ext];
+    }
     __weak typeof(self) weakself = self;
     [AgoraChatClient.sharedClient.chatManager sendMessage:msg progress:nil completion:^(AgoraChatMessage *message, AgoraChatError *error) {
         if (error) {
@@ -713,7 +747,14 @@ static AgoraChatCallManager *agoraChatCallManager = nil;
         kCallResult:aResult,
         kTs:[self getTs]
     };
-    AgoraChatMessage *msg = [[AgoraChatMessage alloc] initWithConversationID:aUid from:AgoraChatClient.sharedClient.currentUsername to:aUid body:msgBody ext:ext];
+    AgoraChatMessage *msg = nil;
+    if (self.modal.groupId.length > 0) {
+        msg = [[AgoraChatMessage alloc] initWithConversationID:self.modal.groupId body:msgBody ext:ext];
+        msg.chatType = AgoraChatTypeGroupChat;
+        msg.receiverList = @[aUid];
+    } else {
+        msg = [[AgoraChatMessage alloc] initWithConversationID:aUid from:AgoraChatClient.sharedClient.currentUsername to:aUid body:msgBody ext:ext];
+    }
     __weak typeof(self) weakself = self;
     [AgoraChatClient.sharedClient.chatManager sendMessage:msg progress:nil completion:^(AgoraChatMessage *message, AgoraChatError *error) {
         if (error) {
@@ -734,9 +775,9 @@ static AgoraChatCallManager *agoraChatCallManager = nil;
 
 - (void)_parseMsg:(AgoraChatMessage*)aMsg
 {
-    if (![aMsg.to isEqualToString:AgoraChatClient.sharedClient.currentUsername]) {
-        return;
-    }
+//    if (![aMsg.to isEqualToString:AgoraChatClient.sharedClient.currentUsername]) {
+//        return;
+//    }
     NSDictionary *ext = aMsg.ext;
     NSString *from = aMsg.from;
     NSString *msgType = [ext objectForKey:kMsgType];

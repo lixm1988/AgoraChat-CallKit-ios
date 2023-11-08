@@ -222,6 +222,8 @@ NS_ASSUME_NONNULL_BEGIN
  */
 @property (nonatomic) NSInteger agoraUid;
 
+@property (nonatomic) NSString* groupId;
+
 - (instancetype)initWithDelegate:(id<AgoraChatCallModalDelegate>)delegate;
 
 @end

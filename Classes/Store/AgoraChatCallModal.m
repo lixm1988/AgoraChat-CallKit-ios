@@ -32,6 +32,7 @@
         self.delegate = delegate;
         self.currentCall = nil;
         self.hasJoinedChannel = NO;
+        self.groupId = @"";
     }
     return self;
 }
